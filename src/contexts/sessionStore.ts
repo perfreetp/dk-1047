@@ -25,7 +25,7 @@ interface SessionStore {
   setFilters: (filters: Partial<SessionFilters>) => void;
   setSelectedSession: (session: Session | null) => void;
   fetchSessions: () => Promise<void>;
-  createSession: (session: Omit<Session, 'id'>) => Promise<void>;
+  createSession: (session: Omit<Session, 'id'>) => Promise<Session>;
   updateSession: (id: string, updates: Partial<Session>) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   fetchStats: () => Promise<void>;
@@ -75,8 +75,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set((state) => ({
         sessions: [newSession, ...state.sessions]
       }));
+      return newSession;
     } catch (error) {
       set({ error: (error as Error).message });
+      throw error;
     }
   },
 

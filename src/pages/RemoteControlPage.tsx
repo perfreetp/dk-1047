@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import ControlToolbar from '../components/RemoteControl/ControlToolbar';
@@ -7,17 +7,22 @@ import ScreenshotTool from '../components/RemoteControl/ScreenshotTool';
 import ClipboardSync from '../components/RemoteControl/ClipboardSync';
 import { useDeviceStore } from '../contexts/deviceStore';
 import { useSessionStore } from '../contexts/sessionStore';
+import { useSettingsStore } from '../contexts/settingsStore';
 
 export default function RemoteControlPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { devices, fetchDevices } = useDeviceStore();
-  const { createSession } = useSessionStore();
+  const { createSession, updateSession } = useSessionStore();
+  const { settings } = useSettingsStore();
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'failed'>('connecting');
   const [quality, setQuality] = useState<'low' | 'medium' | 'high'>('medium');
   const [showScreenshot, setShowScreenshot] = useState(false);
   const [showClipboard, setShowClipboard] = useState(false);
   const [inputLocked, setInputLocked] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [connectionStartTime, setConnectionStartTime] = useState<string | null>(null);
+  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const device = devices.find(d => d.id === id);
 
@@ -42,26 +47,68 @@ export default function RemoteControlPage() {
   }, [device]);
 
   useEffect(() => {
-    if (connectionStatus === 'connected' && device) {
-      createSession({
+    if (connectionStatus === 'connected' && device && !sessionId) {
+      const startTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      setConnectionStartTime(startTime);
+      
+      const newSession = {
         deviceId: device.id,
         deviceName: device.name,
         operator: '张工',
-        startTime: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        startTime: startTime,
         endTime: '',
         duration: 0,
-        status: 'completed',
+        status: 'completed' as const,
         tags: [],
         remark: ''
+      };
+      
+      createSession(newSession).then((created) => {
+        if (created && 'id' in created) {
+          setSessionId((created as any).id);
+        }
       });
     }
   }, [connectionStatus]);
 
+  useEffect(() => {
+    return () => {
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const handleDisconnect = async () => {
+    if (sessionId && connectionStartTime) {
+      const endTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const startTimeDate = new Date(connectionStartTime.replace(' ', 'T'));
+      const endTimeDate = new Date(endTime.replace(' ', 'T'));
+      const duration = Math.round((endTimeDate.getTime() - startTimeDate.getTime()) / 60000);
+
+      await updateSession(sessionId, {
+        endTime,
+        duration: Math.max(duration, 1)
+      });
+    }
+    navigate('/');
+  };
+
   const handleSendKey = (key: string) => {
+    if (settings.connection.confirmSensitiveOps) {
+      if (!confirm(`确定要发送快捷键 "${key}" 吗？`)) {
+        return;
+      }
+    }
     alert(`发送快捷键: ${key}`);
   };
 
   const handleLockInput = (locked: boolean) => {
+    if (settings.connection.confirmSensitiveOps) {
+      if (!confirm(`确定要${locked ? '锁定' : '解锁'}远程设备输入吗？`)) {
+        return;
+      }
+    }
     setInputLocked(locked);
     alert(locked ? '已锁定远程设备输入' : '已解锁远程设备输入');
   };
@@ -112,16 +159,23 @@ export default function RemoteControlPage() {
 
   return (
     <>
-      <div className="bg-slate-800 text-white px-6 py-3 flex items-center gap-4">
-        <button
-          onClick={() => navigate('/')}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          返回
-        </button>
-        <span className="text-slate-400">|</span>
-        <span className="text-sm">远程控制会话</span>
+      <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleDisconnect}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            断开连接
+          </button>
+          <span className="text-slate-400">|</span>
+          <span className="text-sm">远程控制会话</span>
+          {connectionStartTime && (
+            <span className="text-xs text-slate-500">
+              开始时间: {connectionStartTime}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col bg-slate-900">

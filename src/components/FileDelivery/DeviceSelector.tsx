@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Monitor, Check } from 'lucide-react';
 import { useDeviceStore } from '../../contexts/deviceStore';
+import { useSettingsStore } from '../../contexts/settingsStore';
 import { FileTransfer } from '../../data/mockData';
 
 interface DeviceSelectorProps {
@@ -11,14 +12,18 @@ interface DeviceSelectorProps {
 
 export default function DeviceSelector({ selectedFile, onClose, onDeliver }: DeviceSelectorProps) {
   const { devices, fetchDevices } = useDeviceStore();
+  const { settings, fetchSettings } = useSettingsStore();
   const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [isDelivering, setIsDelivering] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     if (devices.length === 0) {
       fetchDevices();
     }
-  });
+    if (!settings) {
+      fetchSettings();
+    }
+  }, []);
 
   const toggleDevice = (deviceId: string) => {
     if (selectedDevices.includes(deviceId)) {
@@ -32,6 +37,21 @@ export default function DeviceSelector({ selectedFile, onClose, onDeliver }: Dev
     if (selectedDevices.length === 0) {
       alert('请至少选择一台设备');
       return;
+    }
+
+    if (settings?.connection.confirmSensitiveOps) {
+      const deviceNames = selectedDevices
+        .map(id => devices.find(d => d.id === id)?.name)
+        .filter(Boolean)
+        .join(', ');
+      
+      const confirmed = confirm(
+        `确定要将文件 "${selectedFile.fileName}" 投递到以下 ${selectedDevices.length} 台设备吗？\n\n设备列表：${deviceNames}\n\n此操作可能涉及敏感操作，请确认是否继续。`
+      );
+      
+      if (!confirmed) {
+        return;
+      }
     }
 
     setIsDelivering(true);
