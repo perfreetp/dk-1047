@@ -20,9 +20,7 @@ export default function DeviceSelector({ selectedFile, onClose, onDeliver }: Dev
     if (devices.length === 0) {
       fetchDevices();
     }
-    if (!settings) {
-      fetchSettings();
-    }
+    fetchSettings();
   }, []);
 
   const toggleDevice = (deviceId: string) => {

@@ -14,6 +14,7 @@ interface ControlToolbarProps {
   deviceName: string;
   connectionStatus: string;
   quality: 'low' | 'medium' | 'high';
+  inputLocked: boolean;
   onQualityChange: (quality: 'low' | 'medium' | 'high') => void;
   onSendKey: (key: string) => void;
   onLockInput: (locked: boolean) => void;
@@ -25,19 +26,17 @@ export default function ControlToolbar({
   deviceName,
   connectionStatus,
   quality,
+  inputLocked,
   onQualityChange,
   onSendKey,
   onLockInput,
   onScreenshot,
   onClipboardSync
 }: ControlToolbarProps) {
-  const [inputLocked, setInputLocked] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const handleLockToggle = () => {
-    const newState = !inputLocked;
-    setInputLocked(newState);
-    onLockInput(newState);
+    onLockInput(!inputLocked);
   };
 
   const keyCombos = [
