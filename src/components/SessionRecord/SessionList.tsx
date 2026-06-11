@@ -1,4 +1,4 @@
-import { Calendar, User, Tag } from 'lucide-react';
+import { Calendar, User, Tag, CheckCircle, AlertCircle, MapPin } from 'lucide-react';
 import { problemTags } from '../../data/mockData';
 import { Session } from '../../data/mockData';
 
@@ -9,6 +9,34 @@ interface SessionListProps {
 }
 
 export default function SessionList({ sessions, onSelect, selectedSession }: SessionListProps) {
+  const getResultBadge = (result: string) => {
+    switch (result) {
+      case 'resolved':
+        return (
+          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-medium flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" />
+            已解决
+          </span>
+        );
+      case 'pending':
+        return (
+          <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-medium flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            待跟进
+          </span>
+        );
+      case 'onsite':
+        return (
+          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            转现场
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (sessions.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
@@ -44,6 +72,7 @@ export default function SessionList({ sessions, onSelect, selectedSession }: Ses
               </div>
 
               <div className="flex items-center gap-2">
+                {getResultBadge(session.result)}
                 <div className={`w-2 h-2 rounded-full ${
                   session.status === 'completed' ? 'bg-emerald-500' :
                   session.status === 'failed' ? 'bg-red-500' : 'bg-amber-500'

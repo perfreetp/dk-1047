@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import ControlToolbar from '../components/RemoteControl/ControlToolbar';
 import ScreenViewer from '../components/RemoteControl/ScreenViewer';
 import ScreenshotTool from '../components/RemoteControl/ScreenshotTool';
 import ClipboardSync from '../components/RemoteControl/ClipboardSync';
+import SessionInfoPanel from '../components/RemoteControl/SessionInfoPanel';
 import { useDeviceStore } from '../contexts/deviceStore';
 import { useSessionStore } from '../contexts/sessionStore';
 import { useSettingsStore } from '../contexts/settingsStore';
@@ -24,6 +25,7 @@ export default function RemoteControlPage() {
   const connectionStartTimeRef = useRef<string | null>(null);
   const hasCreatedSessionRef = useRef(false);
   const deviceRef = useRef<typeof devices[0] | null>(null);
+  const sessionCreatedRef = useRef(false);
 
   const device = devices.find(d => d.id === id);
   deviceRef.current = device || null;
@@ -48,50 +50,13 @@ export default function RemoteControlPage() {
     }
   }, [device]);
 
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (connectionStatus === 'connected' && connectionStartTimeRef.current && deviceRef.current && !hasCreatedSessionRef.current) {
-        const startTime = connectionStartTimeRef.current;
-        const endTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
-        const startTimeDate = new Date(startTime.replace(' ', 'T'));
-        const endTimeDate = new Date(endTime.replace(' ', 'T'));
-        const duration = Math.round((endTimeDate.getTime() - startTimeDate.getTime()) / 60000);
-
-        const sessionData = {
-          deviceId: deviceRef.current.id,
-          deviceName: deviceRef.current.name,
-          operator: '张工',
-          startTime,
-          endTime,
-          duration: Math.max(duration, 1),
-          status: 'completed' as const,
-          tags: [],
-          remark: ''
-        };
-
-        localStorage.setItem('pending_session', JSON.stringify(sessionData));
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [connectionStatus]);
-
-  useEffect(() => {
-    const pendingSession = localStorage.getItem('pending_session');
-    if (pendingSession && connectionStatus === 'connected') {
-      const sessionData = JSON.parse(pendingSession);
-      localStorage.removeItem('pending_session');
-      createSession(sessionData);
-      hasCreatedSessionRef.current = true;
-    }
-  }, [connectionStatus]);
-
-  const handleDisconnect = async () => {
-    if (connectionStatus === 'connected' && connectionStartTimeRef.current && device && !hasCreatedSessionRef.current) {
+  const createSessionRecord = useCallback(async () => {
+    if (
+      connectionStatus === 'connected' && 
+      connectionStartTimeRef.current && 
+      deviceRef.current && 
+      !sessionCreatedRef.current
+    ) {
       const startTime = connectionStartTimeRef.current;
       const endTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
       const startTimeDate = new Date(startTime.replace(' ', 'T'));
@@ -99,8 +64,8 @@ export default function RemoteControlPage() {
       const duration = Math.round((endTimeDate.getTime() - startTimeDate.getTime()) / 60000);
 
       await createSession({
-        deviceId: device.id,
-        deviceName: device.name,
+        deviceId: deviceRef.current.id,
+        deviceName: deviceRef.current.name,
         operator: '张工',
         startTime,
         endTime,
@@ -110,8 +75,69 @@ export default function RemoteControlPage() {
         remark: ''
       });
 
-      hasCreatedSessionRef.current = true;
+      sessionCreatedRef.current = true;
     }
+  }, [connectionStatus, createSession]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (connectionStatus === 'connected' && connectionStartTimeRef.current && !sessionCreatedRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+        
+        const sessionData = {
+          deviceId: deviceRef.current?.id,
+          deviceName: deviceRef.current?.name,
+          operator: '张工',
+          startTime: connectionStartTimeRef.current,
+          endTime: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          duration: Math.max(1, Math.round((Date.now() - new Date(connectionStartTimeRef.current.replace(' ', 'T')).getTime()) / 60000)),
+          status: 'completed',
+          tags: [],
+          remark: ''
+        };
+        
+        localStorage.setItem('pending_session_' + id, JSON.stringify(sessionData));
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [connectionStatus, id]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      createSessionRecord();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [createSessionRecord]);
+
+  useEffect(() => {
+    const pendingKey = 'pending_session_' + id;
+    const pendingSession = localStorage.getItem(pendingKey);
+    
+    if (pendingSession) {
+      const sessionData = JSON.parse(pendingSession);
+      localStorage.removeItem(pendingKey);
+      
+      if (sessionData.deviceId === id && !sessionCreatedRef.current) {
+        createSession(sessionData);
+        sessionCreatedRef.current = true;
+      }
+    }
+  }, [id, createSession]);
+
+  const handleDisconnect = async () => {
+    await createSessionRecord();
+    sessionCreatedRef.current = true;
     navigate('/');
   };
 
@@ -190,11 +216,6 @@ export default function RemoteControlPage() {
           </button>
           <span className="text-slate-400">|</span>
           <span className="text-sm">远程控制会话</span>
-          {connectionStartTimeRef.current && (
-            <span className="text-xs text-slate-500">
-              开始时间: {connectionStartTimeRef.current}
-            </span>
-          )}
         </div>
       </div>
 
@@ -211,7 +232,21 @@ export default function RemoteControlPage() {
           onClipboardSync={handleClipboardSync}
         />
 
-        <ScreenViewer screens={device.screens} currentQuality={quality} />
+        <div className="flex flex-1">
+          <div className="flex-1">
+            <ScreenViewer screens={device.screens} currentQuality={quality} />
+          </div>
+          
+          {connectionStatus === 'connected' && connectionStartTimeRef.current && (
+            <div className="w-80 p-4 bg-slate-800 border-l border-slate-700">
+              <SessionInfoPanel
+                startTime={connectionStartTimeRef.current}
+                deviceName={device.name}
+                operator="张工"
+              />
+            </div>
+          )}
+        </div>
 
         {inputLocked && (
           <div className="bg-amber-600 text-white px-6 py-3 flex items-center justify-center gap-2">

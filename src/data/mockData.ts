@@ -26,6 +26,7 @@ export interface Session {
   endTime: string;
   duration: number;
   status: 'completed' | 'failed' | 'rejected';
+  result: 'resolved' | 'pending' | 'onsite' | '';
   tags: string[];
   remark: string;
 }
@@ -165,6 +166,7 @@ export const initialSessions: Session[] = [
     endTime: '2026-06-12 09:25:00',
     duration: 25,
     status: 'completed',
+    result: 'resolved',
     tags: ['软件问题'],
     remark: 'POS系统更新后无法打印小票,重新安装驱动后解决'
   },
@@ -177,6 +179,7 @@ export const initialSessions: Session[] = [
     endTime: '2026-06-12 08:45:00',
     duration: 15,
     status: 'completed',
+    result: 'resolved',
     tags: ['网络问题'],
     remark: '网络连接不稳定,检查网线后恢复'
   },
@@ -189,6 +192,7 @@ export const initialSessions: Session[] = [
     endTime: '2026-06-11 16:20:00',
     duration: 20,
     status: 'completed',
+    result: 'resolved',
     tags: ['硬件故障'],
     remark: '显示屏闪烁,更换信号线后正常'
   },
@@ -201,6 +205,7 @@ export const initialSessions: Session[] = [
     endTime: '',
     duration: 0,
     status: 'rejected',
+    result: '',
     tags: ['配置问题'],
     remark: '设备离线,无法连接'
   },
@@ -213,6 +218,7 @@ export const initialSessions: Session[] = [
     endTime: '2026-06-10 14:30:00',
     duration: 30,
     status: 'completed',
+    result: 'resolved',
     tags: ['软件问题', '配置问题'],
     remark: '财务软件无法启动,检查权限后修复'
   }

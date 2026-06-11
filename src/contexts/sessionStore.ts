@@ -71,7 +71,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   createSession: async (session) => {
     try {
-      const newSession = await sessionApi.create(session);
+      const sessionWithResult = {
+        ...session,
+        result: session.result || '' as const
+      };
+      const newSession = await sessionApi.create(sessionWithResult);
       set((state) => ({
         sessions: [newSession, ...state.sessions]
       }));
