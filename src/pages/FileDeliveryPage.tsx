@@ -6,18 +6,21 @@ import DeviceSelector from '../components/FileDelivery/DeviceSelector';
 import LogExportModal from '../components/FileDelivery/LogExportModal';
 import { useFileStore } from '../contexts/fileStore';
 import { useSessionStore } from '../contexts/sessionStore';
+import { useDeviceStore } from '../contexts/deviceStore';
 import { FileTransfer } from '../data/mockData';
 import { Download } from 'lucide-react';
 
 export default function FileDeliveryPage() {
   const { files, fetchFiles, deliverFile } = useFileStore();
   const { fetchSessions } = useSessionStore();
+  const { fetchDevices } = useDeviceStore();
   const [selectedFile, setSelectedFile] = useState<FileTransfer | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     fetchFiles();
     fetchSessions();
+    fetchDevices();
   }, []);
 
   const handleSelectFile = (file: FileTransfer) => {
@@ -71,7 +74,7 @@ export default function FileDeliveryPage() {
       {showExportModal && (
         <LogExportModal
           onClose={() => setShowExportModal(false)}
-          onExportComplete={() => {}}
+          onExportComplete={fetchFiles}
         />
       )}
     </>

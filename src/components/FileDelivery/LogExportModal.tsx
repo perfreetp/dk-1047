@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Calendar, Download } from 'lucide-react';
 import { useDeviceStore } from '../../contexts/deviceStore';
 import { useSessionStore } from '../../contexts/sessionStore';
+import { useFileStore } from '../../contexts/fileStore';
 
 interface LogExportModalProps {
   onClose: () => void;
@@ -9,12 +10,17 @@ interface LogExportModalProps {
 }
 
 export default function LogExportModal({ onClose, onExportComplete }: LogExportModalProps) {
-  const { devices } = useDeviceStore();
+  const { devices, fetchDevices } = useDeviceStore();
   const { sessions } = useSessionStore();
+  const { uploadFile } = useFileStore();
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
 
   const handleExport = async () => {
     if (!selectedDeviceId || !startDate || !endDate) {
@@ -72,6 +78,9 @@ ${i + 1}. 会话ID: ${s.id}
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    const fakeFile = new File([logContent], `device_log_${device?.name || 'unknown'}_${startDate}_${endDate}.txt`, { type: 'text/plain' });
+    await uploadFile(fakeFile);
 
     setIsExporting(false);
     alert(`日志导出成功！共 ${filteredSessions.length} 条会话记录`);

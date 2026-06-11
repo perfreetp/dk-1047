@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import ControlToolbar from '../components/RemoteControl/ControlToolbar';
@@ -14,15 +14,13 @@ export default function RemoteControlPage() {
   const navigate = useNavigate();
   const { devices, fetchDevices } = useDeviceStore();
   const { createSession, updateSession } = useSessionStore();
-  const { settings } = useSettingsStore();
+  const { settings, fetchSettings } = useSettingsStore();
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'failed'>('connecting');
   const [quality, setQuality] = useState<'low' | 'medium' | 'high'>('medium');
   const [showScreenshot, setShowScreenshot] = useState(false);
   const [showClipboard, setShowClipboard] = useState(false);
   const [inputLocked, setInputLocked] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [connectionStartTime, setConnectionStartTime] = useState<string | null>(null);
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [pendingLockState, setPendingLockState] = useState<boolean | null>(null);
 
   const device = devices.find(d => d.id === id);
 
@@ -30,7 +28,10 @@ export default function RemoteControlPage() {
     if (devices.length === 0) {
       fetchDevices();
     }
-  }, [devices.length, fetchDevices]);
+    if (!settings) {
+      fetchSettings();
+    }
+  }, []);
 
   useEffect(() => {
     if (device) {
@@ -46,56 +47,31 @@ export default function RemoteControlPage() {
     }
   }, [device]);
 
-  useEffect(() => {
-    if (connectionStatus === 'connected' && device && !sessionId) {
-      const startTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
-      setConnectionStartTime(startTime);
-      
-      const newSession = {
-        deviceId: device.id,
-        deviceName: device.name,
-        operator: '张工',
-        startTime: startTime,
-        endTime: '',
-        duration: 0,
-        status: 'completed' as const,
-        tags: [],
-        remark: ''
-      };
-      
-      createSession(newSession).then((created) => {
-        if (created && 'id' in created) {
-          setSessionId((created as any).id);
-        }
-      });
-    }
-  }, [connectionStatus]);
-
-  useEffect(() => {
-    return () => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-    };
-  }, []);
-
   const handleDisconnect = async () => {
-    if (sessionId && connectionStartTime) {
+    if (connectionStatus === 'connected' && device) {
+      const startTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
       const endTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
-      const startTimeDate = new Date(connectionStartTime.replace(' ', 'T'));
+      const startTimeDate = new Date(startTime.replace(' ', 'T'));
       const endTimeDate = new Date(endTime.replace(' ', 'T'));
       const duration = Math.round((endTimeDate.getTime() - startTimeDate.getTime()) / 60000);
 
-      await updateSession(sessionId, {
+      await createSession({
+        deviceId: device.id,
+        deviceName: device.name,
+        operator: '张工',
+        startTime,
         endTime,
-        duration: Math.max(duration, 1)
+        duration: Math.max(duration, 1),
+        status: 'completed',
+        tags: [],
+        remark: ''
       });
     }
     navigate('/');
   };
 
   const handleSendKey = (key: string) => {
-    if (settings.connection.confirmSensitiveOps) {
+    if (settings?.connection.confirmSensitiveOps) {
       if (!confirm(`确定要发送快捷键 "${key}" 吗？`)) {
         return;
       }
@@ -104,13 +80,14 @@ export default function RemoteControlPage() {
   };
 
   const handleLockInput = (locked: boolean) => {
-    if (settings.connection.confirmSensitiveOps) {
+    if (settings?.connection.confirmSensitiveOps) {
       if (!confirm(`确定要${locked ? '锁定' : '解锁'}远程设备输入吗？`)) {
+        setPendingLockState(null);
         return;
       }
     }
     setInputLocked(locked);
-    alert(locked ? '已锁定远程设备输入' : '已解锁远程设备输入');
+    setPendingLockState(null);
   };
 
   const handleScreenshot = () => {
@@ -170,11 +147,6 @@ export default function RemoteControlPage() {
           </button>
           <span className="text-slate-400">|</span>
           <span className="text-sm">远程控制会话</span>
-          {connectionStartTime && (
-            <span className="text-xs text-slate-500">
-              开始时间: {connectionStartTime}
-            </span>
-          )}
         </div>
       </div>
 
